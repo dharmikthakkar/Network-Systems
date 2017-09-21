@@ -21,20 +21,25 @@
 void receive_file_from_client(unsigned char file_name[], int socket_n, struct sockaddr_in client_st)
 {
 	char read_file[PACKET_SIZE];
-	char recv_done;
+	char recv_done = 0;
 	char server_response[] = "orange";	
 	size_t write_bytes;
 	int nbytes;
 	int addr_length = sizeof(client_st);
+	int i = 0;
 	FILE *fp;
 	fp = fopen(file_name, "w");
 	//printf("\n\r%s\n\r", (char *)fp);
 	while(!recv_done){
 		nbytes = recvfrom(socket_n, read_file, PACKET_SIZE, 0, (struct sockaddr *)&client_st, &addr_length);
-		printf("\n\rPackets received = %d\n\r", nbytes);
+		printf("\n\rPacket received = %d\n\r", i++);
 		if(nbytes < PACKET_SIZE) recv_done = 1; 
 		write_bytes = fwrite(read_file, nbytes, sizeof(char), fp);
 		//printf("\n\rWritten bytes = %d\n\r", (int)write_bytes);
+//		if(timeout_test == 0){
+//			usleep(300000);
+//			timeout_test = 1;
+//		}
 		nbytes = sendto(socket_n, server_response, strlen(server_response), 0, (struct sockaddr *)&client_st, sizeof(client_st));
 		bzero(read_file,sizeof(read_file));
 	}	
@@ -47,23 +52,43 @@ void receive_file_from_client(unsigned char file_name[], int socket_n, struct so
 
 void send_file_to_client(unsigned char file_name[], int socket_n, struct sockaddr_in client_st)
 {
+	struct timeval tv;
 	char read_file[PACKET_SIZE];
 	char client_response[10];	
 	size_t read_bytes;
 	int nbytes;
 	int addr_length = sizeof(client_st);
+	int rv;
+	int i = 0;
+	char resend = 0;
+	tv.tv_sec = 0;
+	tv.tv_usec = 100000;
 	FILE *fp;
 	fp = fopen(file_name, "r");
 	//printf("\n\r%s\n\r", (char *)fp);
+	rv = setsockopt(socket_n, SOL_SOCKET, SO_RCVTIMEO, (struct timeval *)&tv, sizeof(tv));
+	if(rv < 0){
+		printf("\n\rSetsockopt error\n\r");
+	}
 	while(!feof(fp)){
-		read_bytes = fread(read_file, sizeof(char), PACKET_SIZE, fp);
-		printf("\n\rRead bytes = %d\n\r", (int)read_bytes);
+		if(resend == 0){
+			read_bytes = fread(read_file, sizeof(char), PACKET_SIZE, fp);
+			printf("\n\rRead bytes = %d\n\r", (int)read_bytes);
+		}
 		nbytes = sendto(socket_n, read_file, read_bytes, 0, (struct sockaddr *)&client_st, sizeof(client_st));
-		printf("\n\rPackets sent = %d\n\r", nbytes);
+		printf("\n\rPacket sent = %d\n\r", nbytes);
 		nbytes = recvfrom(socket_n, client_response, 10, 0, (struct sockaddr *)&client_st, &addr_length);  
-		printf("\n\rServer says %s\n\r", client_response);
-		bzero(read_file,sizeof(read_file));
-		bzero(client_response,sizeof(client_response));
+		if(nbytes < 0 && errno == EAGAIN){
+			printf("\n\rACK timeout error\n\r");
+			resend = 1;
+			i--;	
+		}
+		else{
+			printf("\n\rClient says %s\n\r", client_response);
+			bzero(read_file,sizeof(read_file));
+			bzero(client_response,sizeof(client_response));
+			resend = 0;
+		}
 	}	
 	//nbytes = sendto(socket_n, file_done, strlen(read_file), 0, (struct sockaddr *)&server_struct, sizeof(server_struct));
 	fclose(fp);
@@ -122,15 +147,15 @@ int main (int argc, char * argv[] )
 	char msg[] = "orange";
 	nbytes = sendto(sock, msg, strlen(msg), 0, (struct sockaddr *)&remote, sizeof(remote));
 
-//	receive_file_from_client("/home/djdharmik/Downloads/udp/server_files/foo1", sock, remote);
-//	receive_file_from_client("/home/djdharmik/Downloads/udp/server_files/foo2", sock, remote);
-//	receive_file_from_client("/home/djdharmik/Downloads/udp/server_files/foo3", sock, remote);
-	receive_file_from_client("/home/djdharmik/Downloads/udp/server_files/ProblmSet1.docx", sock, remote);
+	receive_file_from_client("/home/djdharmik/Downloads/udp/server_files/foo1", sock, remote);
+	receive_file_from_client("/home/djdharmik/Downloads/udp/server_files/foo2", sock, remote);
+	receive_file_from_client("/home/djdharmik/Downloads/udp/server_files/foo3", sock, remote);
+	//receive_file_from_client("/home/djdharmik/Downloads/udp/server_files/ProblmSet1.docx", sock, remote);
 
-//	send_file_to_client("/home/djdharmik/Downloads/udp/server_files/foo1", sock, remote);
-//	send_file_to_client("/home/djdharmik/Downloads/udp/server_files/foo2", sock, remote);
-//	send_file_to_client("/home/djdharmik/Downloads/udp/server_files/foo3", sock, remote);
-	send_file_to_client("/home/djdharmik/Downloads/udp/server_files/ProblmSet1.docx", sock, remote);
+	send_file_to_client("/home/djdharmik/Downloads/udp/server_files/foo1", sock, remote);
+	send_file_to_client("/home/djdharmik/Downloads/udp/server_files/foo2", sock, remote);
+	send_file_to_client("/home/djdharmik/Downloads/udp/server_files/foo3", sock, remote);
+	//send_file_to_client("/home/djdharmik/Downloads/udp/server_files/ProblmSet1.docx", sock, remote);
 
 	
 	close(sock);
