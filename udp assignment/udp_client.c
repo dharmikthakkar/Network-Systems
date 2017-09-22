@@ -19,6 +19,18 @@
 /* You will have to modify the program below */
 
 //extern int errno;
+signed char compare_packets(char packet1[], char packet2[]){
+	int bit_i = 0;
+	for(bit_i = 0; bit_i<PACKET_SIZE; bit_i++){
+		//printf("\n\rpacket1[bit_i] = %d\tpacket2[bit_i] = %d", packet1[bit_i], packet2[bit_i]);
+		if(packet1[bit_i] != packet2[bit_i]) break;
+	}
+	//printf("\n\rbit_i=%d", bit_i);
+	if(bit_i == PACKET_SIZE) return 0;
+	else return -1;
+}
+
+
 
 void send_file_to_server(unsigned char file_name[], int socket_n, struct sockaddr_in server_struct)
 {
@@ -31,8 +43,8 @@ void send_file_to_server(unsigned char file_name[], int socket_n, struct sockadd
 	int rv;
 	int i = 0;
 	char resend = 0;
-	tv.tv_sec = 2;
-	tv.tv_usec = 0;
+	tv.tv_sec = 0;
+	tv.tv_usec = 100000;
 	FILE *fp;
 	fp = fopen(file_name, "r");
 	//printf("\n\r%s\n\r", (char *)fp);
@@ -66,25 +78,47 @@ void send_file_to_server(unsigned char file_name[], int socket_n, struct sockadd
 }
 
 void receive_file_from_server(unsigned char file_name[], int socket_n, struct sockaddr_in server_struct){
+	struct timeval tv;
 	char read_file[PACKET_SIZE];
+	char read_file_2[PACKET_SIZE];
 	char recv_done = 0;
 	char client_response[] = "apple";	
 	size_t write_bytes;
 	int nbytes;
 	int addr_length = sizeof(server_struct);
+	int j = 0;
 	int i = 0;
+	tv.tv_sec = 0;
+	tv.tv_usec = 0;
+	char temp = 0;
+	int rv;
+	char timeout_test = 0;
 	FILE *fp;
 	fp = fopen(file_name, "w");
 	//printf("\n\r%s\n\r", (char *)fp);
+	rv = setsockopt(socket_n, SOL_SOCKET, SO_RCVTIMEO, (struct timeval *)&tv, sizeof(tv));
+	if(rv < 0){
+		printf("\n\rSetsockopt error\n\r");
+	}
 	while(!recv_done){
 		nbytes = recvfrom(socket_n, read_file, PACKET_SIZE, 0, (struct sockaddr *)&server_struct, &addr_length);
-		printf("\n\rPacket received = %d\n\r", i++);
+		if(nbytes < 0 && errno == EAGAIN){
+			printf("\n\rACK timeout error\n\r");
+		}		
+		printf("\n\rPacket received");
+		if(compare_packets(read_file, read_file_2) < 0){
+			printf("\n\rValid New Packet received = %d", i++);
+			for(j=0; j<PACKET_SIZE; j++){
+				read_file[j] = read_file_2[j];
+			}		
+		}
+		else printf("\n\rPacket same as previous packet. Packet discarded");
 		if(nbytes < PACKET_SIZE) recv_done = 1; 
 		write_bytes = fwrite(read_file, nbytes, sizeof(char), fp);
 		//printf("\n\rWritten bytes = %d\n\r", (int)write_bytes);
-		while(1);
+		//while(1);
 		nbytes = sendto(socket_n, client_response, strlen(client_response), 0, (struct sockaddr *)&server_struct, sizeof(server_struct));
-		bzero(read_file,sizeof(read_file));
+		bzero(read_file_2,sizeof(read_file_2));
 	}	
 	recv_done = 0;
 	fclose(fp);
