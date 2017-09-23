@@ -12,10 +12,12 @@
 #include <stdlib.h>
 #include <memory.h>
 #include <string.h>
+#include <dirent.h>
 /* You will have to modify the program below */
 
 #define MAXBUFSIZE 100
 #define PACKET_SIZE 1000
+
 
 signed char compare_packets(char packet1[], char packet2[]){
 	int bit_i = 0;
@@ -27,6 +29,130 @@ signed char compare_packets(char packet1[], char packet2[]){
 	if(bit_i == PACKET_SIZE) return 0;
 	else return -1;
 }
+
+/* You will have to modify the program below */
+char * send_packet(char packet[],  int socket_n, struct sockaddr_in client_st, char reliability){
+	struct timeval tv;
+	char client_response[10];
+	int nbytes;
+	int addr_length = sizeof(client_st);
+	int rv;
+	char resend = 0;
+	if(reliability == 1){
+		tv.tv_sec = 0;
+		tv.tv_usec = 100000;
+	}
+	else{
+		tv.tv_sec = 0;
+		tv.tv_usec = 0;
+	}		
+	rv = setsockopt(socket_n, SOL_SOCKET, SO_RCVTIMEO, (struct timeval *)&tv, sizeof(tv));
+	if(rv < 0){
+		printf("\n\rSetsockopt error\n\r");
+	}
+	do{
+		nbytes = sendto(socket_n, packet, PACKET_SIZE, 0, (struct sockaddr *)&client_st, sizeof(client_st));
+		printf("\n\rPacket sent %s of %d bytes\n\r", packet, nbytes);
+		nbytes = recvfrom(socket_n, client_response, 10, 0, (struct sockaddr *)&client_st, &addr_length);  
+		if(nbytes < 0 && errno == EAGAIN && reliability == 1){
+			printf("\n\rACK timeout error\n\r");
+			resend = 1;
+		}
+	//		printf("\n\rbytes received = %d\n\r", nbytes);		
+		else{
+			printf("\n\rServer says %s\n\r", client_response);
+			resend = 0;			
+		}	
+	}while(resend == 1);
+	bzero(client_response,sizeof(client_response));	
+}
+
+char * receive_packet(int socket_n, struct sockaddr_in client_st, char reliability){
+	struct timeval tv;
+	static char packet[PACKET_SIZE];
+	char packet_2[PACKET_SIZE];
+	char recv_done = 0;
+	char server_response[] = "apple";	
+	int nbytes;
+	int addr_length = sizeof(client_st);
+	tv.tv_sec = 0;
+	tv.tv_usec = 0;
+	char temp = 0;
+	int rv;
+	printf("\n\rpacket = %s\n\r", packet);
+	//printf("\n\r%s\n\r", (char *)fp);
+	rv = setsockopt(socket_n, SOL_SOCKET, SO_RCVTIMEO, (struct timeval *)&tv, sizeof(tv));
+	if(rv < 0){
+		printf("\n\rSetsockopt error\n\r");
+	}
+	bzero(packet_2,sizeof(packet_2));
+	nbytes = recvfrom(socket_n, packet_2, PACKET_SIZE, 0, (struct sockaddr *)&client_st, &addr_length);	
+	printf("\n\rPacket received = %s of %d bytes\n\r", packet_2, nbytes);
+	if(reliability == 0) return packet;
+	if(compare_packets(packet, packet_2) < 0){
+		printf("\n\rValid New Packet received\n\r");
+		recv_done = 1;
+		for(int j=0; j<PACKET_SIZE; j++){
+			packet[j] = packet_2[j];
+		}		
+	}
+	else printf("\n\rPacket same as previous packet. Packet discarded");
+	usleep(900000);
+	nbytes = sendto(socket_n, server_response, strlen(server_response), 0, (struct sockaddr *)&client_st, sizeof(client_st));
+	bzero(packet_2,sizeof(packet_2));
+	printf("\n\rpacket = %s\n\r", packet);
+	if(recv_done == 1) return packet;
+	else return NULL;
+	
+}
+
+
+char *(*list_files(char dir_name[], int socket_n, struct sockaddr_in client_st)){
+	struct timeval tv;
+	char client_response[10];
+	int i=0;
+	int j=0;
+	int rv;
+	char resend = 0;
+	int nbytes;
+	tv.tv_sec = 0;
+	tv.tv_usec = 100000;
+	int addr_length = sizeof(client_st);
+	static char * files[200];
+	struct dirent *de;
+	DIR *dir = opendir(dir_name);
+	if(dir == NULL){
+		printf("\n\rCould not open directory\n\r");
+		return NULL;
+	}
+	while((de = readdir(dir)) != NULL){
+		printf("\n\r%s", de->d_name);
+		(*(files +i)) = de->d_name;
+		i++;	
+	}
+	printf("\n");
+	printf("\n\rNumber of files in the directory=%d\n\r", i);
+	closedir(dir);
+	rv = setsockopt(socket_n, SOL_SOCKET, SO_RCVTIMEO, (struct timeval *)&tv, sizeof(tv));
+	if(rv < 0){
+		printf("\n\rSetsockopt error\n\r");
+	}
+	for(j=0; j<i; j++){
+		//while(1);
+		nbytes = sendto(socket_n, files[j], sizeof(files[j]), 0, (struct sockaddr *)&client_st, sizeof(client_st));
+		printf("\n\rPacket sent = %d\n\r", nbytes);
+		nbytes = recvfrom(socket_n, client_response, 10, 0, (struct sockaddr *)&client_st, &addr_length);  
+		if(nbytes < 0 && errno == EAGAIN){
+			printf("\n\rACK timeout error\n\r");
+			j--;	
+		}
+		else{
+			printf("\n\rClient says %s\n\r", client_response);
+		}
+	}
+	return files;
+}
+
 
 void receive_file_from_client(unsigned char file_name[], int socket_n, struct sockaddr_in client_st)
 {
@@ -40,6 +166,7 @@ void receive_file_from_client(unsigned char file_name[], int socket_n, struct so
 	int addr_length = sizeof(client_st);
 	int j = 0;
 	int i = 0;
+	int rv;
 	tv.tv_sec = 0;
 	tv.tv_usec = 0;
 	char timeout_test = 0;
@@ -135,12 +262,14 @@ int main (int argc, char * argv[] )
 	unsigned int remote_length;         //length of the sockaddr_in structure
 	int nbytes;                        //number of bytes we receive in our message
 	char buffer[MAXBUFSIZE];             //a buffer to store our received message
+	char * (*files_in_dir);
 	if (argc != 2)
 	{
-		printf ("USAGE:  <port>\n");
+		printf ("\n\rUSAGE:  <port>\n");
 		exit(1);
 	}
-
+	//files_in_dir = list_files("./");
+	//printf("\n\r%s\n\r", *(files_in_dir + 10));
 	/******************
 	  This code populates the sockaddr_in struct with
 	  the information about our socket
@@ -154,7 +283,7 @@ int main (int argc, char * argv[] )
 	//Causes the system to create a generic socket of type UDP (datagram)
 	if ((sock = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
 	{
-		printf("unable to create socket");
+		printf("\n\runable to create socket");
 	}
 
 
@@ -164,7 +293,7 @@ int main (int argc, char * argv[] )
 	 ******************/
 	if (bind(sock, (struct sockaddr *)&sin, sizeof(sin)) < 0)
 	{
-		printf("unable to bind socket\n");
+		printf("\n\runable to bind socket\n");
 	}
 
 	remote_length = sizeof(remote);
@@ -172,12 +301,27 @@ int main (int argc, char * argv[] )
 	//waits for an incoming message
 	bzero(buffer,sizeof(buffer));
 	nbytes = nbytes = recvfrom(sock, buffer, MAXBUFSIZE, 0, (struct sockaddr *)&remote, &remote_length);
-
-	printf("The client says %s\n", buffer);
-
+	
+	printf("\n\rThe client says %s\n", buffer);
+	char * message_received;
 	char msg[] = "orange";
+	int temp2=0;
 	nbytes = sendto(sock, msg, strlen(msg), 0, (struct sockaddr *)&remote, sizeof(remote));
-
+	do{
+		message_received = receive_packet(sock, remote, 1);
+		printf("\n\r%s\n\r", message_received);
+		if(message_received != NULL) temp2 = atoi(message_received);
+		//printf("\n\ri = %d\n\r", i);
+	}while(i>0 && i<1000);
+	for(int temp = 0; temp < temp2; temp++){
+		message_received = receive_packet(sock, remote, 1);
+		printf("\n\r%s   temp =%d\n\r", message_received, temp);
+		if(message_received == NULL) temp--;
+		
+	}
+	printf("\n\rdone\n\r");
+	while(1);
+	//nbytes = sendto(sock, files_in_dir[0], strlen(files_in_dir[0]), 0, (struct sockaddr *)&remote, sizeof(remote));
 	receive_file_from_client("/home/djdharmik/Downloads/udp/server_files/foo1", sock, remote);
 	receive_file_from_client("/home/djdharmik/Downloads/udp/server_files/foo2", sock, remote);
 	receive_file_from_client("/home/djdharmik/Downloads/udp/server_files/foo3", sock, remote);
