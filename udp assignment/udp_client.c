@@ -18,7 +18,6 @@
 signed char compare_packets(char packet1[], char packet2[]){
 	int bit_i = 0;
 	for(bit_i = 0; bit_i<PACKET_SIZE; bit_i++){
-		//printf("\n\rpacket1[bit_i] = %d\tpacket2[bit_i] = %d", packet1[bit_i], packet2[bit_i]);
 		if(packet1[bit_i] != packet2[bit_i]) break;
 	}
 	//printf("\n\rbit_i=%d", bit_i);
@@ -57,7 +56,6 @@ char * send_packet(char packet[],  int socket_n, struct sockaddr_in server_struc
 			resend = 1;
 			packet_i--;
 		}
-	//		printf("\n\rbytes received = %d\n\r", nbytes);		
 		else{
 			printf("\n\rServer says %s\n\r", server_response);
 			resend = 0;			
@@ -77,9 +75,7 @@ char * receive_packet(int socket_n, struct sockaddr_in server_struct, char relia
 	int addr_length = sizeof(server_struct);
 	tv.tv_sec = 0;
 	tv.tv_usec = 0;
-	char temp = 0;
 	int rv;
-	//printf("\n\r%s\n\r", (char *)fp);
 	rv = setsockopt(socket_n, SOL_SOCKET, SO_RCVTIMEO, (struct timeval *)&tv, sizeof(tv));
 	if(rv < 0){
 		printf("\n\rSetsockopt error\n\r");
@@ -98,56 +94,12 @@ char * receive_packet(int socket_n, struct sockaddr_in server_struct, char relia
 		printf("\n\rPacket same as previous packet. Packet discarded");
 		packet_i--;
 	}
-	//printf("\n\rpacket = %s\n\r", packet);
-	//usleep(900000);
 	nbytes = sendto(socket_n, client_response, strlen(client_response), 0, (struct sockaddr *)&server_struct, sizeof(server_struct));
 	bzero(packet_2,sizeof(packet_2));
 	if(recv_done == 1) return packet;
 	else return NULL;
 	
 }
-
-
-void list_file(char dir_name[],  int socket_n, struct sockaddr_in server_struct){
-	struct timeval tv;
-	char server_response[10];
-	size_t read_bytes;
-	int nbytes;
-	int addr_length = sizeof(server_struct);
-	int rv;
-	int j = 0;
-	char resend = 0;
-	tv.tv_sec = 0;
-	tv.tv_usec = 100000;
-	rv = setsockopt(socket_n, SOL_SOCKET, SO_RCVTIMEO, (struct timeval *)&tv, sizeof(tv));
-	if(rv < 0){
-		printf("\n\rSetsockopt error\n\r");
-	}
-	do{
-		nbytes = sendto(socket_n, dir_name, PACKET_SIZE, 0, (struct sockaddr *)&server_struct, sizeof(server_struct));
-		printf("\n\rPacket sent\n\r");
-		nbytes = recvfrom(socket_n, server_response, 10, 0, (struct sockaddr *)&server_struct, &addr_length);  
-		if(nbytes < 0 && errno == EAGAIN){
-			printf("\n\rACK timeout error\n\r");
-			resend = 1;
-		}
-	//		printf("\n\rbytes received = %d\n\r", nbytes);		
-		else{
-			printf("\n\rServer says %s\n\r", server_response);
-			resend = 0;			
-		}	
-	}while(resend == 1);
-//	if(server_response != "NODIR"){
-//		for(j = 0; j < num_files; j++){
-//			
-//			
-//		}
-//	}
-
-}
-
-//extern int errno;
-
 
 void send_file_to_server(unsigned char file_name[], int socket_n, struct sockaddr_in server_struct)
 {
@@ -207,12 +159,10 @@ void receive_file_from_server(unsigned char file_name[], int socket_n, struct so
 	int i = 0;
 	tv.tv_sec = 0;
 	tv.tv_usec = 0;
-	char temp = 0;
 	int rv;
 	char timeout_test = 0;
 	FILE *fp;
 	fp = fopen(file_name, "w");
-	//printf("\n\r%s\n\r", (char *)fp);
 	rv = setsockopt(socket_n, SOL_SOCKET, SO_RCVTIMEO, (struct timeval *)&tv, sizeof(tv));
 	if(rv < 0){
 		printf("\n\rSetsockopt error\n\r");
@@ -232,8 +182,6 @@ void receive_file_from_server(unsigned char file_name[], int socket_n, struct so
 		else printf("\n\rPacket same as previous packet. Packet discarded");
 		if(nbytes < PACKET_SIZE) recv_done = 1; 
 		write_bytes = fwrite(read_file, nbytes, sizeof(char), fp);
-		//printf("\n\rWritten bytes = %d\n\r", (int)write_bytes);
-		//while(1);
 		nbytes = sendto(socket_n, client_response, strlen(client_response), 0, (struct sockaddr *)&server_struct, sizeof(server_struct));
 		bzero(read_file_2,sizeof(read_file_2));
 	}	
@@ -247,8 +195,6 @@ void user_interface( int socket_n, struct sockaddr_in server_struct){
 	char *message_received;
 	char in[100];
 	char files [400] = "\n\r";
-	int num_files = 0;
-	int temp_files = 0;
 	do{
 		bzero(in,sizeof(in));
 		printf("\n\rEnter your choice!\n\r");
@@ -288,19 +234,12 @@ void user_interface( int socket_n, struct sockaddr_in server_struct){
 			do{
 				message_received = receive_packet(socket_n, server_struct, 1);
 				if(message_received != NULL){
-//					*(files + num_files) = (char *)message_received;
 					if(strcmp(message_received, "eof") == 0) break;
-//					printf("\n\rfile = %s at %d | %p\n\r", *(files + num_files), num_files, (files + num_files));
 					strcat(files,message_received);
 					strcat(files, "\n\r");
-				//	printf("%s", files);
-				//	num_files++;
 				}	
 			}while(1);
 			printf("\n\rFiles in the directory:\n\r");
-//			for(temp_files = 0; temp_files<=num_files; temp_files++){
-//				printf("\n\r%s at %d | %p", *(files + temp_files), temp_files, (files + temp_files));
-//			}
 			printf("%s", files);			
 				
 		}
@@ -333,12 +272,6 @@ int main (int argc, char * argv[])
 
 	struct sockaddr_in remote, server;              //"Internet socket address structure"
 	
-/* file operations debugging begin*/
-
-	
-
-/* file operations debugging end*/
-
 	if (argc < 3)
 	{
 		printf("USAGE:  <server_ip> <server_port>\n");
@@ -373,29 +306,8 @@ int main (int argc, char * argv[])
 	//struct sockaddr_in from_addr;
 	int addr_length = sizeof(server);
 	bzero(buffer,sizeof(buffer));
-//	nbytes = recvfrom(sock, buffer, MAXBUFSIZE, 0, (struct sockaddr *)&server, &addr_length);  
-//	printf("Server says %s\n", buffer);
-	
-//	do{
-//		message_received = receive_packet(sock, remote, 1);
-//		printf("\n\r%s\n\r", message_received);
-//		printf("\n\r %c %c %c\n\r", *(message_received), *(message_received + 1), *(message_received + 2));
-//		if(message_received != NULL){
-//			if(*(message_received) == 'e' && *(message_received + 1) == 'o' && *(message_received + 2) == 'f') break;;
-//		}	
-//	}while(1);
 
 	user_interface(sock, remote);
-
-//	send_file_to_server("/home/djdharmik/Downloads/udp/foo1", sock, remote);
-//	send_file_to_server("/home/djdharmik/Downloads/udp/foo2", sock, remote);
-//	send_file_to_server("/home/djdharmik/Downloads/udp/foo3", sock, remote);
-	//send_file_to_server("/home/djdharmik/Downloads/udp/ProblmSet1.docx", sock, remote);
-
-//	receive_file_from_server("/home/djdharmik/Downloads/udp/client_files/foo1", sock, remote);
-//	receive_file_from_server("/home/djdharmik/Downloads/udp/client_files/foo2", sock, remote);
-//	receive_file_from_server("/home/djdharmik/Downloads/udp/client_files/foo3", sock, remote);
-	//receive_file_from_server("/home/djdharmik/Downloads/udp/client_files/ProblmSet1.docx", sock, remote);
 
 	close(sock);
 
