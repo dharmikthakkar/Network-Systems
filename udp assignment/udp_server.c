@@ -51,7 +51,7 @@ char * send_packet(char packet[],  int socket_n, struct sockaddr_in client_st, c
 	}
 	do{
 		nbytes = sendto(socket_n, packet, PACKET_SIZE, 0, (struct sockaddr *)&client_st, sizeof(client_st));
-		printf("\n\rPacket sent = %d\n\r", packet_i);
+		printf("\n\rPacket sent = %d\n\r", packet_i++);
 		nbytes = recvfrom(socket_n, client_response, 10, 0, (struct sockaddr *)&client_st, &addr_length);  
 		if(nbytes < 0 && errno == EAGAIN && reliability == 1){
 			printf("\n\rACK timeout error\n\r");
@@ -69,7 +69,7 @@ char * send_packet(char packet[],  int socket_n, struct sockaddr_in client_st, c
 char * receive_packet(int socket_n, struct sockaddr_in client_st, char reliability){
 	struct timeval tv;
 	static char packet[PACKET_SIZE];
-	char packet_2[PACKET_SIZE];
+	static char packet_2[PACKET_SIZE];
 	char recv_done = 0;
 	char server_response[] = "apple";	
 	static int packet_i = 0;
@@ -85,7 +85,11 @@ char * receive_packet(int socket_n, struct sockaddr_in client_st, char reliabili
 	bzero(packet_2,sizeof(packet_2));
 	nbytes = recvfrom(socket_n, packet_2, PACKET_SIZE, 0, (struct sockaddr *)&client_st, &addr_length);	
 	printf("\n\rPacket received = %d\n\r", packet_i++);
-	if(reliability == 0) return packet;
+	if(reliability == 0 || strcmp(packet, "eof") == 0){
+		bzero(packet, sizeof(packet));
+		nbytes = sendto(socket_n, server_response, strlen(server_response), 0, (struct sockaddr *)&client_st, sizeof(client_st));
+		return packet_2;
+	}
 	if(compare_packets(packet, packet_2) < 0){
 		printf("\n\rValid New Packet received\n\r");
 		recv_done = 1;
@@ -236,18 +240,18 @@ void user_interface(int socket_n, struct sockaddr_in client_st){
 	do{
 		strcpy(dir_path, "./server_files/");
 		printf("\n\rReceiving command from the client\n\r");
-		message_received = receive_packet(socket_n, client_st, 1);
+		message_received = receive_packet(socket_n, client_st, 0);
 		printf("\n\r%s\n\r", message_received);
 		if(message_received != NULL){
 			if(strcmp(message_received, "get") == 0){
-				message_received = receive_packet(socket_n, client_st, 1);
+				message_received = receive_packet(socket_n, client_st, 0);
 				strcat(dir_path, message_received);
 				printf("\n\rdir_path = %s\n\r", dir_path);
 				send_file_to_client(dir_path, socket_n, client_st);
 								
 			}
 			else if(strcmp(message_received, "put") == 0){
-				message_received = receive_packet(socket_n, client_st, 1);
+				message_received = receive_packet(socket_n, client_st, 0);
 				strcat(dir_path, message_received);
 				printf("\n\rdir_path = %s\n\r", dir_path);
 				receive_file_from_client(dir_path, socket_n, client_st);			
@@ -257,7 +261,7 @@ void user_interface(int socket_n, struct sockaddr_in client_st){
 			
 			}
 			else if(strcmp(message_received, "del") == 0){
-				message_received = receive_packet(socket_n, client_st, 1);
+				message_received = receive_packet(socket_n, client_st, 0);
 				strcat(dir_path, message_received);
 				printf("\n\rdir_path = %s\n\r", dir_path);
 				rv = remove(dir_path);

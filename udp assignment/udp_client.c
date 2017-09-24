@@ -67,7 +67,7 @@ char * send_packet(char packet[],  int socket_n, struct sockaddr_in server_struc
 char * receive_packet(int socket_n, struct sockaddr_in server_struct, char reliability){
 	struct timeval tv;
 	static char packet[PACKET_SIZE];
-	char packet_2[PACKET_SIZE];
+	static char packet_2[PACKET_SIZE];
 	char recv_done = 0;
 	static int packet_i = 0;
 	char client_response[] = "apple";	
@@ -80,9 +80,14 @@ char * receive_packet(int socket_n, struct sockaddr_in server_struct, char relia
 	if(rv < 0){
 		printf("\n\rSetsockopt error\n\r");
 	}
+	bzero(packet_2,sizeof(packet_2));
 	nbytes = recvfrom(socket_n, packet_2, PACKET_SIZE, 0, (struct sockaddr *)&server_struct, &addr_length);	
 	printf("\n\rPacket received = %d\n\r", packet_i++);
-	if(reliability == 0) return packet;
+	if(reliability == 0 || strcmp(packet, "eof") == 0){
+		bzero(packet, sizeof(packet));	
+		nbytes = sendto(socket_n, client_response, strlen(client_response), 0, (struct sockaddr *)&server_struct, sizeof(server_struct));	
+		return packet_2;
+	}
 	if(compare_packets(packet, packet_2) < 0){
 		printf("\n\rValid New Packet received\n\r");
 		recv_done = 1;
