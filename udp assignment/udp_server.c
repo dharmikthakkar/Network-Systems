@@ -111,7 +111,6 @@ char * receive_packet(int socket_n, struct sockaddr_in client_st, char reliabili
 
 char *(*list_files(char dir_name[], int socket_n, struct sockaddr_in client_st)){
 	struct timeval tv;
-	char client_response[10];
 	int i=0;
 	int j=0;
 	int rv;
@@ -168,6 +167,8 @@ void receive_file_from_client(unsigned char file_name[], int socket_n, struct so
 	if(rv < 0){
 		printf("\n\rSetsockopt error\n\r");
 	}
+	bzero(read_file, sizeof(read_file));
+	bzero(read_file_2, sizeof(read_file_2));
 	while(!recv_done){
 		nbytes = recvfrom(socket_n, read_file_2, PACKET_SIZE, 0, (struct sockaddr *)&client_st, &addr_length);
 		printf("\n\rPacket received");
@@ -175,11 +176,11 @@ void receive_file_from_client(unsigned char file_name[], int socket_n, struct so
 			printf("\n\rValid New Packet received = %d", i++);
 			for(j=0; j<PACKET_SIZE; j++){
 				read_file[j] = read_file_2[j];
-			}		
+			}	
+			write_bytes = fwrite(read_file, nbytes, sizeof(char), fp);	
 		}
 		else printf("\n\rPacket same as previous packet. Packet discarded");
 		if(nbytes < PACKET_SIZE) recv_done = 1; 
-		write_bytes = fwrite(read_file, nbytes, sizeof(char), fp);
 		nbytes = sendto(socket_n, server_response, strlen(server_response), 0, (struct sockaddr *)&client_st, sizeof(client_st));
 		bzero(read_file_2,sizeof(read_file_2));
 	}	
@@ -215,7 +216,7 @@ void send_file_to_client(unsigned char file_name[], int socket_n, struct sockadd
 			printf("\n\rRead bytes = %d\n\r", (int)read_bytes);
 		}
 		nbytes = sendto(socket_n, read_file, read_bytes, 0, (struct sockaddr *)&client_st, sizeof(client_st));
-		printf("\n\rPacket sent = %d\n\r", nbytes);
+		printf("\n\rPacket sent = %d\n\r", i++);
 		nbytes = recvfrom(socket_n, client_response, 10, 0, (struct sockaddr *)&client_st, &addr_length);  
 		if(nbytes < 0 && errno == EAGAIN){
 			printf("\n\rACK timeout error\n\r");
@@ -238,7 +239,7 @@ void user_interface(int socket_n, struct sockaddr_in client_st){
 	char * message_received;
 	int rv=0;
 	do{
-		strcpy(dir_path, "./server_files/");
+		strcpy(dir_path, "./");
 		printf("\n\rReceiving command from the client\n\r");
 		message_received = receive_packet(socket_n, client_st, 0);
 		printf("\n\r%s\n\r", message_received);
@@ -257,7 +258,7 @@ void user_interface(int socket_n, struct sockaddr_in client_st){
 				receive_file_from_client(dir_path, socket_n, client_st);			
 			}
 			else if(strcmp(message_received, "ls") == 0){
-				list_files("./server_files/", socket_n, client_st);
+				list_files("./", socket_n, client_st);
 			
 			}
 			else if(strcmp(message_received, "del") == 0){

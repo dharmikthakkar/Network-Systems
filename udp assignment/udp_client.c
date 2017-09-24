@@ -172,6 +172,8 @@ void receive_file_from_server(unsigned char file_name[], int socket_n, struct so
 	if(rv < 0){
 		printf("\n\rSetsockopt error\n\r");
 	}
+	bzero(read_file, sizeof(read_file));
+	bzero(read_file_2, sizeof(read_file_2));
 	while(!recv_done){
 		nbytes = recvfrom(socket_n, read_file_2, PACKET_SIZE, 0, (struct sockaddr *)&server_struct, &addr_length);
 		if(nbytes < 0 && errno == EAGAIN){
@@ -182,11 +184,11 @@ void receive_file_from_server(unsigned char file_name[], int socket_n, struct so
 			printf("\n\rValid New Packet received = %d", i++);
 			for(j=0; j<PACKET_SIZE; j++){
 				read_file[j] = read_file_2[j];
-			}		
+			}
+			write_bytes = fwrite(read_file, nbytes, sizeof(char), fp);		
 		}
 		else printf("\n\rPacket same as previous packet. Packet discarded");
 		if(nbytes < PACKET_SIZE) recv_done = 1; 
-		write_bytes = fwrite(read_file, nbytes, sizeof(char), fp);
 		nbytes = sendto(socket_n, client_response, strlen(client_response), 0, (struct sockaddr *)&server_struct, sizeof(server_struct));
 		bzero(read_file_2,sizeof(read_file_2));
 	}	
@@ -263,6 +265,7 @@ void user_interface( int socket_n, struct sockaddr_in server_struct){
 		else{
 			printf("\n\rYou enterred %c. Wrong choice\n\r", in[0]);	
 		}
+	strcpy(files, "\n\r");
 	}while(1);
 
 }
