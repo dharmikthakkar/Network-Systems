@@ -152,13 +152,15 @@ void receive_file_from_client(unsigned char file_name[], int socket_n, struct so
 	char read_file[PACKET_SIZE];
 	char read_file_2[PACKET_SIZE];
 	char recv_done = 0;
-	char server_response[] = "orange";	
+	char server_response[10];	
 	size_t write_bytes;
+	char * message_received;
 	int nbytes;
 	int addr_length = sizeof(client_st);
 	int j = 0;
 	int i = 0;
 	int rv;
+	int temp_write=0;
 	tv.tv_sec = 0;
 	tv.tv_usec = 0;
 	FILE *fp;
@@ -171,17 +173,35 @@ void receive_file_from_client(unsigned char file_name[], int socket_n, struct so
 	bzero(read_file_2, sizeof(read_file_2));
 	while(!recv_done){
 		nbytes = recvfrom(socket_n, read_file_2, PACKET_SIZE, 0, (struct sockaddr *)&client_st, &addr_length);
-		printf("\n\rPacket received");
-		if(compare_packets(read_file, read_file_2) < 0){
-			printf("\n\rValid New Packet received = %d", i++);
-			for(j=0; j<PACKET_SIZE; j++){
-				read_file[j] = read_file_2[j];
-			}	
-			write_bytes = fwrite(read_file, nbytes, sizeof(char), fp);	
+		if(nbytes >= 0){
+			printf("\n\rPacket received of %d", nbytes);
+			if(strcmp(read_file_2, "eof") != 0){
+				if(compare_packets(read_file, read_file_2) < 0){
+					printf("\n\rValid New Packet received = %d of %d", i++, nbytes);
+					for(j=0; j<PACKET_SIZE; j++){
+						read_file[j] = read_file_2[j];
+					}	
+					write_bytes = fwrite(read_file, nbytes - 1, sizeof(char), fp);
+					printf("\n\rWritten Bytes = %ld | %d times", write_bytes, temp_write++);	
+				}
+				else{
+					printf("\n\rPacket same as previous packet. Packet discarded");
+				}
+				server_response[0] = (i%100) - 1;
+				nbytes = sendto(socket_n, server_response, 10, 0, (struct sockaddr *)&client_st, sizeof(client_st));
+			}
+			else{
+				printf("\n\rReceive done!"); 
+				recv_done = 1; 
+				do{
+					send_packet("eof", socket_n, client_st, 1);
+					message_received = receive_packet(socket_n, client_st, 0);
+				}while(strcmp(message_received, "done") != 0);	
+			}
+		}				
+		else{
+			printf("\n\rReceive error!");
 		}
-		else printf("\n\rPacket same as previous packet. Packet discarded");
-		if(nbytes < PACKET_SIZE) recv_done = 1; 
-		nbytes = sendto(socket_n, server_response, strlen(server_response), 0, (struct sockaddr *)&client_st, sizeof(client_st));
 		bzero(read_file_2,sizeof(read_file_2));
 	}	
 	recv_done = 0;
