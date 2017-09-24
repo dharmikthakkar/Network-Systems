@@ -32,6 +32,7 @@ char * send_packet(char packet[],  int socket_n, struct sockaddr_in server_struc
 	struct timeval tv;
 	char server_response[10];
 	int nbytes;
+	static int packet_i = 0;
 	int addr_length = sizeof(server_struct);
 	int rv;
 	char resend = 0;
@@ -49,11 +50,12 @@ char * send_packet(char packet[],  int socket_n, struct sockaddr_in server_struc
 	}
 	do{
 		nbytes = sendto(socket_n, packet, PACKET_SIZE, 0, (struct sockaddr *)&server_struct, sizeof(server_struct));
-		printf("\n\rPacket sent %s of %d bytes\n\r", packet, nbytes);
+		printf("\n\rPacket sent = %d\n\r", packet_i++);
 		nbytes = recvfrom(socket_n, server_response, 10, 0, (struct sockaddr *)&server_struct, &addr_length);  
 		if(nbytes < 0 && errno == EAGAIN && reliability == 1){
 			printf("\n\rACK timeout error\n\r");
 			resend = 1;
+			packet_i--;
 		}
 	//		printf("\n\rbytes received = %d\n\r", nbytes);		
 		else{
@@ -69,6 +71,7 @@ char * receive_packet(int socket_n, struct sockaddr_in server_struct, char relia
 	static char packet[PACKET_SIZE];
 	char packet_2[PACKET_SIZE];
 	char recv_done = 0;
+	static int packet_i = 0;
 	char client_response[] = "apple";	
 	int nbytes;
 	int addr_length = sizeof(server_struct);
@@ -76,14 +79,13 @@ char * receive_packet(int socket_n, struct sockaddr_in server_struct, char relia
 	tv.tv_usec = 0;
 	char temp = 0;
 	int rv;
-	printf("\n\rpacket = %s\n\r", packet);
 	//printf("\n\r%s\n\r", (char *)fp);
 	rv = setsockopt(socket_n, SOL_SOCKET, SO_RCVTIMEO, (struct timeval *)&tv, sizeof(tv));
 	if(rv < 0){
 		printf("\n\rSetsockopt error\n\r");
 	}
 	nbytes = recvfrom(socket_n, packet_2, PACKET_SIZE, 0, (struct sockaddr *)&server_struct, &addr_length);	
-	printf("\n\rPacket received = %s of %d bytes\n\r", packet_2, nbytes);
+	printf("\n\rPacket received = %d\n\r", packet_i++);
 	if(reliability == 0) return packet;
 	if(compare_packets(packet, packet_2) < 0){
 		printf("\n\rValid New Packet received\n\r");
@@ -92,9 +94,12 @@ char * receive_packet(int socket_n, struct sockaddr_in server_struct, char relia
 			packet[j] = packet_2[j];
 		}		
 	}
-	else printf("\n\rPacket same as previous packet. Packet discarded");
-	printf("\n\rpacket = %s\n\r", packet);
-	usleep(900000);
+	else {
+		printf("\n\rPacket same as previous packet. Packet discarded");
+		packet_i--;
+	}
+	//printf("\n\rpacket = %s\n\r", packet);
+	//usleep(900000);
 	nbytes = sendto(socket_n, client_response, strlen(client_response), 0, (struct sockaddr *)&server_struct, sizeof(server_struct));
 	bzero(packet_2,sizeof(packet_2));
 	if(recv_done == 1) return packet;
@@ -237,6 +242,88 @@ void receive_file_from_server(unsigned char file_name[], int socket_n, struct so
 
 }
 
+void user_interface( int socket_n, struct sockaddr_in server_struct){
+	char dir_path[50];
+	char *message_received;
+	char in[100];
+	char files [400] = "\n\r";
+	int num_files = 0;
+	int temp_files = 0;
+	do{
+		bzero(in,sizeof(in));
+		printf("\n\rEnter your choice!\n\r");
+		printf("\n\r1:Get file\n\r");
+		printf("\n\r2:Put file\n\r");
+		printf("\n\r3:List file\n\r");
+		printf("\n\r4:Delete file\n\r");	
+		printf("\n\r5:Exit\n\r");
+		fgets(in, 3, stdin);
+		if(in[0]=='1'){
+			strcpy(dir_path, "/home/djdharmik/Downloads/udp/client_files/");
+			send_packet("get", socket_n, server_struct, 1);
+			printf("\n\rGet file selected. Enter the file name\n\r");
+			fgets(in, 100, stdin);	
+			in[strlen(in) - 1] = '\0';
+			printf("\n\rYou enterred: %s\n\r", in);	
+			send_packet(in, socket_n, server_struct, 1);
+			strcat(dir_path, in);
+			receive_file_from_server(dir_path, socket_n, server_struct);
+		
+						
+		}
+		else if(in[0]=='2'){
+			strcpy(dir_path, "/home/djdharmik/Downloads/udp/");
+			send_packet("put", socket_n, server_struct, 1);
+			printf("\n\rPut file selected. Enter the file name\n\r");
+			fgets(in, 100, stdin);	
+			in[strlen(in) - 1] = '\0';
+			printf("\n\rYou enterred: %s\n\r", in);	
+			send_packet(in, socket_n, server_struct, 1);
+			strcat(dir_path, in);
+			send_file_to_server(dir_path, socket_n, server_struct);
+		}
+		else if(in[0]=='3'){
+			send_packet("ls", socket_n, server_struct, 1);
+			printf("\n\rList file selected\n\r");
+			do{
+				message_received = receive_packet(socket_n, server_struct, 1);
+				if(message_received != NULL){
+//					*(files + num_files) = (char *)message_received;
+					if(strcmp(message_received, "eof") == 0) break;
+//					printf("\n\rfile = %s at %d | %p\n\r", *(files + num_files), num_files, (files + num_files));
+					strcat(files,message_received);
+					strcat(files, "\n\r");
+				//	printf("%s", files);
+				//	num_files++;
+				}	
+			}while(1);
+			printf("\n\rFiles in the directory:\n\r");
+//			for(temp_files = 0; temp_files<=num_files; temp_files++){
+//				printf("\n\r%s at %d | %p", *(files + temp_files), temp_files, (files + temp_files));
+//			}
+			printf("%s", files);			
+				
+		}
+		else if(in[0]=='4'){
+			send_packet("del", socket_n, server_struct, 1);
+			printf("\n\rDelete file selected. Enter the file name\n\r");	
+			fgets(in, 100, stdin);
+			in[strlen(in) - 1] = '\0';
+			printf("\n\rYou enterred: %s\n\r", in);	
+			send_packet(in, socket_n, server_struct, 1);		
+		}
+		else if(in[0]=='5'){
+			send_packet("exit", socket_n, server_struct, 1);
+			printf("\n\rExiting the server\n\r");	
+		}
+		else{
+			printf("\n\rYou enterred %c. Wrong choice\n\r", in[0]);	
+		}
+	}while(1);
+
+}
+
+
 int main (int argc, char * argv[])
 {
 
@@ -286,27 +373,28 @@ int main (int argc, char * argv[])
 	//struct sockaddr_in from_addr;
 	int addr_length = sizeof(server);
 	bzero(buffer,sizeof(buffer));
-	nbytes = recvfrom(sock, buffer, MAXBUFSIZE, 0, (struct sockaddr *)&server, &addr_length);  
-	printf("Server says %s\n", buffer);
+//	nbytes = recvfrom(sock, buffer, MAXBUFSIZE, 0, (struct sockaddr *)&server, &addr_length);  
+//	printf("Server says %s\n", buffer);
+	
+//	do{
+//		message_received = receive_packet(sock, remote, 1);
+//		printf("\n\r%s\n\r", message_received);
+//		printf("\n\r %c %c %c\n\r", *(message_received), *(message_received + 1), *(message_received + 2));
+//		if(message_received != NULL){
+//			if(*(message_received) == 'e' && *(message_received + 1) == 'o' && *(message_received + 2) == 'f') break;;
+//		}	
+//	}while(1);
 
-	send_packet("04", sock, remote, 1);
-	send_packet("abc", sock, remote, 1);
-	send_packet("xyz", sock, remote, 1);
-	send_packet("def", sock, remote, 1);
-	send_packet("pqr", sock, remote, 1);
+	user_interface(sock, remote);
 
-
-
-	printf("\n\rdone\n\r");		
-	while(1);
-	send_file_to_server("/home/djdharmik/Downloads/udp/foo1", sock, remote);
-	send_file_to_server("/home/djdharmik/Downloads/udp/foo2", sock, remote);
-	send_file_to_server("/home/djdharmik/Downloads/udp/foo3", sock, remote);
+//	send_file_to_server("/home/djdharmik/Downloads/udp/foo1", sock, remote);
+//	send_file_to_server("/home/djdharmik/Downloads/udp/foo2", sock, remote);
+//	send_file_to_server("/home/djdharmik/Downloads/udp/foo3", sock, remote);
 	//send_file_to_server("/home/djdharmik/Downloads/udp/ProblmSet1.docx", sock, remote);
 
-	receive_file_from_server("/home/djdharmik/Downloads/udp/client_files/foo1", sock, remote);
-	receive_file_from_server("/home/djdharmik/Downloads/udp/client_files/foo2", sock, remote);
-	receive_file_from_server("/home/djdharmik/Downloads/udp/client_files/foo3", sock, remote);
+//	receive_file_from_server("/home/djdharmik/Downloads/udp/client_files/foo1", sock, remote);
+//	receive_file_from_server("/home/djdharmik/Downloads/udp/client_files/foo2", sock, remote);
+//	receive_file_from_server("/home/djdharmik/Downloads/udp/client_files/foo3", sock, remote);
 	//receive_file_from_server("/home/djdharmik/Downloads/udp/client_files/ProblmSet1.docx", sock, remote);
 
 	close(sock);
