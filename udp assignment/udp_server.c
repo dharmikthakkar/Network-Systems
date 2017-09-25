@@ -59,7 +59,7 @@ char * send_packet(char packet[],  int socket_n, struct sockaddr_in client_st, c
 			packet_i--;
 		}
 		else{
-			printf("\n\rServer says %s\n\r", client_response);
+			printf("\n\rClient says %s\n\r", client_response);
 			resend = 0;			
 		}	
 	}while(resend == 1);
@@ -193,10 +193,10 @@ void receive_file_from_client(unsigned char file_name[], int socket_n, struct so
 			else{
 				printf("\n\rReceive done!"); 
 				recv_done = 1; 
-				do{
-					send_packet("eof", socket_n, client_st, 1);
-					message_received = receive_packet(socket_n, client_st, 0);
-				}while(strcmp(message_received, "done") != 0);	
+//				do{
+//					send_packet("eof", socket_n, client_st, 1);
+//					message_received = receive_packet(socket_n, client_st, 0);
+//				}while(strcmp(message_received, "done") != 0);	
 			}
 		}				
 		else{
@@ -215,12 +215,15 @@ void send_file_to_client(unsigned char file_name[], int socket_n, struct sockadd
 {
 	struct timeval tv;
 	char read_file[PACKET_SIZE];
+	char read_file_2[PACKET_SIZE];
 	char client_response[10];	
 	size_t read_bytes;
 	int nbytes;
+	char * message_received;
 	int addr_length = sizeof(client_st);
 	int rv;
 	int i = 0;
+	unsigned char id=0;
 	char resend = 0;
 	tv.tv_sec = 0;
 	tv.tv_usec = 100000;
@@ -232,24 +235,46 @@ void send_file_to_client(unsigned char file_name[], int socket_n, struct sockadd
 	}
 	while(!feof(fp)){
 		if(resend == 0){
-			read_bytes = fread(read_file, sizeof(char), PACKET_SIZE, fp);
-			printf("\n\rRead bytes = %d\n\r", (int)read_bytes);
+			read_bytes = fread(read_file_2, sizeof(char), PACKET_SIZE - 1, fp);
+			printf("\n\rRead bytes = %d", (int)read_bytes);
+			read_file_2[read_bytes] = id%2;
+			id++;
+			printf("\n\rlast byte of read_file_2 = %d", read_file_2[read_bytes]);
+			if(compare_packets(read_file, read_file_2) < 0){
+				for(int temp_f=0; temp_f<PACKET_SIZE; temp_f++){
+					read_file[temp_f] = read_file_2[temp_f];
+				}				
+			}
+			else{
+				printf("\n\rPacket same as previous packet. Read repeat\n\r");
+				while(1);
+			}
 		}
-		nbytes = sendto(socket_n, read_file, read_bytes, 0, (struct sockaddr *)&client_st, sizeof(client_st));
-		printf("\n\rPacket sent = %d\n\r", i++);
+		nbytes = sendto(socket_n, read_file, read_bytes + 1, 0, (struct sockaddr *)&client_st, sizeof(client_st));
+		printf("\n\rPacket sent = %d", i++);
 		nbytes = recvfrom(socket_n, client_response, 10, 0, (struct sockaddr *)&client_st, &addr_length);  
 		if(nbytes < 0 && errno == EAGAIN){
-			printf("\n\rACK timeout error\n\r");
+			printf("\n\rACK timeout error");
 			resend = 1;
 			i--;	
 		}
+		else if(client_response[0] != ((i%100)-1)){
+			resend = 1;
+			printf("\n\rServer response = %d resending..", client_response[0]);
+			i--;
+		}
 		else{
-			printf("\n\rClient says %s\n\r", client_response);
-			bzero(read_file,sizeof(read_file));
+			printf("\n\rClient says %d\n\r", client_response[0]);
+			//bzero(read_file,sizeof(read_file));
 			bzero(client_response,sizeof(client_response));
 			resend = 0;
 		}
-	}	
+	}
+	send_packet("eof", socket_n, client_st, 1);
+//	do{
+//		message_received = receive_packet(socket_n, client_st, 0);
+//	}while(strcmp(message_received, "eof") != 0);
+//	send_packet("done", socket_n, client_st, 1);		
 	fclose(fp);
 }
 

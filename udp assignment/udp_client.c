@@ -124,7 +124,6 @@ void send_file_to_server(unsigned char file_name[], int socket_n, struct sockadd
 	tv.tv_usec = 300000;
 	FILE *fp;
 	fp = fopen(file_name, "r");
-	//printf("\n\r%s\n\r", (char *)fp);
 	rv = setsockopt(socket_n, SOL_SOCKET, SO_RCVTIMEO, (struct timeval *)&tv, sizeof(tv));
 	if(rv < 0){
 		printf("\n\rSetsockopt error\n\r");
@@ -159,7 +158,6 @@ void send_file_to_server(unsigned char file_name[], int socket_n, struct sockadd
 			printf("\n\rServer response = %d resending..", server_response[0]);
 			i--;
 		}
-//		printf("\n\rbytes received = %d\n\r", nbytes);		
 		else{
 			printf("\n\rServer says %d\n\r", server_response[0]);
 			//bzero(read_file_2,sizeof(read_file) - 1);
@@ -168,11 +166,10 @@ void send_file_to_server(unsigned char file_name[], int socket_n, struct sockadd
 		}	
 	}
 	send_packet("eof", socket_n, server_struct, 1);
-	do{
-		message_received = receive_packet(socket_n, server_struct, 0);
-	}while(strcmp(message_received, "eof") != 0);
-	send_packet("done", socket_n, server_struct, 1);	
-	//nbytes = sendto(socket_n, file_done, strlen(read_file), 0, (struct sockaddr *)&server_struct, sizeof(server_struct));
+//	do{
+//		message_received = receive_packet(socket_n, server_struct, 0);
+//	}while(strcmp(message_received, "eof") != 0);
+//	send_packet("done", socket_n, server_struct, 1);	
 	fclose(fp);
 }
 
@@ -181,16 +178,17 @@ void receive_file_from_server(unsigned char file_name[], int socket_n, struct so
 	char read_file[PACKET_SIZE];
 	char read_file_2[PACKET_SIZE];
 	char recv_done = 0;
-	char client_response[] = "apple";	
+	char client_response[10];	
 	size_t write_bytes;
+	char * message_received;
 	int nbytes;
 	int addr_length = sizeof(server_struct);
 	int j = 0;
 	int i = 0;
+	int rv;
+	int temp_write=0;
 	tv.tv_sec = 0;
 	tv.tv_usec = 0;
-	int rv;
-	char timeout_test = 0;
 	FILE *fp;
 	fp = fopen(file_name, "w");
 	rv = setsockopt(socket_n, SOL_SOCKET, SO_RCVTIMEO, (struct timeval *)&tv, sizeof(tv));
@@ -201,20 +199,35 @@ void receive_file_from_server(unsigned char file_name[], int socket_n, struct so
 	bzero(read_file_2, sizeof(read_file_2));
 	while(!recv_done){
 		nbytes = recvfrom(socket_n, read_file_2, PACKET_SIZE, 0, (struct sockaddr *)&server_struct, &addr_length);
-		if(nbytes < 0 && errno == EAGAIN){
-			printf("\n\rACK timeout error\n\r");
-		}		
-		printf("\n\rPacket received");
-		if(compare_packets(read_file, read_file_2) < 0){
-			printf("\n\rValid New Packet received = %d", i++);
-			for(j=0; j<PACKET_SIZE; j++){
-				read_file[j] = read_file_2[j];
+		if(nbytes >= 0){
+			printf("\n\rPacket received of %d", nbytes);
+			if(strcmp(read_file_2, "eof") != 0){
+				if(compare_packets(read_file, read_file_2) < 0){
+					printf("\n\rValid New Packet received = %d of %d", i++, nbytes);
+					for(j=0; j<PACKET_SIZE; j++){
+						read_file[j] = read_file_2[j];
+					}
+					write_bytes = fwrite(read_file, nbytes - 1, sizeof(char), fp);	
+					printf("\n\rWritten Bytes = %ld | %d times", write_bytes, temp_write++);		
+				}
+				else{
+					printf("\n\rPacket same as previous packet. Packet discarded");
+				}
+				client_response[0] = (i%100) - 1;
+				nbytes = sendto(socket_n, client_response, 10, 0, (struct sockaddr *)&server_struct, sizeof(server_struct));
 			}
-			write_bytes = fwrite(read_file, nbytes, sizeof(char), fp);		
+			else{
+				printf("\n\rReceive done!"); 
+				recv_done = 1; 
+//				do{
+//					send_packet("eof", socket_n, server_struct, 1);
+//					message_received = receive_packet(socket_n, server_struct, 0);
+//				}while(strcmp(message_received, "done") != 0);	
+			}
 		}
-		else printf("\n\rPacket same as previous packet. Packet discarded");
-		if(nbytes < PACKET_SIZE) recv_done = 1; 
-		nbytes = sendto(socket_n, client_response, strlen(client_response), 0, (struct sockaddr *)&server_struct, sizeof(server_struct));
+		else{
+			printf("\n\rReceive error!");
+		}
 		bzero(read_file_2,sizeof(read_file_2));
 	}	
 	recv_done = 0;
