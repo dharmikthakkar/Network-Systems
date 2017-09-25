@@ -51,15 +51,15 @@ char * send_packet(char packet[],  int socket_n, struct sockaddr_in client_st, c
 	}
 	do{
 		nbytes = sendto(socket_n, packet, PACKET_SIZE, 0, (struct sockaddr *)&client_st, sizeof(client_st));
-		printf("\n\rPacket sent = %d\n\r", packet_i++);
+		printf("\n\rPacket sent = %d", packet_i++);
 		nbytes = recvfrom(socket_n, client_response, 10, 0, (struct sockaddr *)&client_st, &addr_length);  
 		if(nbytes < 0 && errno == EAGAIN && reliability == 1){
-			printf("\n\rACK timeout error\n\r");
+			printf("\n\rACK timeout error");
 			resend = 1;
 			packet_i--;
 		}
 		else{
-			printf("\n\rClient says %s\n\r", client_response);
+			printf("\n\rClient says %s", client_response);
 			resend = 0;			
 		}	
 	}while(resend == 1);
@@ -84,14 +84,15 @@ char * receive_packet(int socket_n, struct sockaddr_in client_st, char reliabili
 	}
 	bzero(packet_2,sizeof(packet_2));
 	nbytes = recvfrom(socket_n, packet_2, PACKET_SIZE, 0, (struct sockaddr *)&client_st, &addr_length);	
-	printf("\n\rPacket received = %d\n\r", packet_i++);
+	printf("\n\rPacket received = %d", packet_i++);
 	if(reliability == 0 || strcmp(packet, "eof") == 0){
 		bzero(packet, sizeof(packet));
+		packet_i = 0;
 		nbytes = sendto(socket_n, server_response, strlen(server_response), 0, (struct sockaddr *)&client_st, sizeof(client_st));
 		return packet_2;
 	}
 	if(compare_packets(packet, packet_2) < 0){
-		printf("\n\rValid New Packet received\n\r");
+		printf("\n\rValid New Packet received");
 		recv_done = 1;
 		for(int j=0; j<PACKET_SIZE; j++){
 			packet[j] = packet_2[j];
@@ -138,6 +139,7 @@ char *(*list_files(char dir_name[], int socket_n, struct sockaddr_in client_st))
 	if(rv < 0){
 		printf("\n\rSetsockopt error\n\r");
 	}
+	send_packet("sof", socket_n, client_st, 1);
 	for(j=0; j<i; j++){
 		send_packet(files[j], socket_n, client_st, 1);
 	}
@@ -173,7 +175,7 @@ void receive_file_from_client(unsigned char file_name[], int socket_n, struct so
 	bzero(read_file_2, sizeof(read_file_2));
 	while(!recv_done){
 		nbytes = recvfrom(socket_n, read_file_2, PACKET_SIZE, 0, (struct sockaddr *)&client_st, &addr_length);
-		if(nbytes >= 0){
+		if(nbytes >= 0 && strcmp(read_file_2, "apple") != 0){
 			printf("\n\rPacket received of %d", nbytes);
 			if(strcmp(read_file_2, "eof") != 0){
 				if(compare_packets(read_file, read_file_2) < 0){
@@ -193,6 +195,7 @@ void receive_file_from_client(unsigned char file_name[], int socket_n, struct so
 			else{
 				printf("\n\rReceive done!"); 
 				recv_done = 1; 
+				nbytes = sendto(socket_n, "eof", 10, 0, (struct sockaddr *)&client_st, sizeof(client_st));
 //				do{
 //					send_packet("eof", socket_n, client_st, 1);
 //					message_received = receive_packet(socket_n, client_st, 0);
@@ -286,7 +289,9 @@ void user_interface(int socket_n, struct sockaddr_in client_st){
 	do{
 		strcpy(dir_path, "./");
 		printf("\n\rReceiving command from the client\n\r");
-		message_received = receive_packet(socket_n, client_st, 0);
+		do{
+			message_received = receive_packet(socket_n, client_st, 0);
+		}while(strcmp(message_received, "apple") == 0);
 		printf("\n\r%s\n\r", message_received);
 		if(message_received != NULL){
 			if(strcmp(message_received, "get") == 0){
