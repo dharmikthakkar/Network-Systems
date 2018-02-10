@@ -1,0 +1,19 @@
+Web-server application that allows persistent connections.
+
+TCP Webserver
+
+This submission contains a main.c file, makefile, www directory, ws.conf file.
+
+TO run the application:
+1] Do make
+2] Run ./webserver
+
+HTTP Methods Implemented:
+1] GET
+2] POST
+
+Errors handled:
+1] 404
+2] 400
+3] 501
+4] 500

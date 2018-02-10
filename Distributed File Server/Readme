@@ -1,0 +1,57 @@
+
+This folder contains:
+
+1. dfc.c - This file acts as Client Program
+2. dfs.c - This file acts as Server Program
+3. Makefile   - This file creates two executable file client and server 
+4. dfc.conf - Configuration file for client1 [Alice]
+5. dfc2.conf - Configuration file for client2 [Bob]
+6. dfs.conf - Configuration file for server
+
+Start the Server
+
+1. Open Terminal. 
+2. Navigate to the curent directory
+
+Run the command: ./dfs [directory] [portnum]
+ - example: ./dfs DFS2/ 10002
+
+
+The server runs forever, using TCP Protocol.
+
+
+Start the Client
+
+1. Open Terminal. 
+2. Navigate to the curent directory
+
+Run the command: ./dfs [Configfile] 
+
+/******************************************************************************/
+The client supports the following functions:
+
+Available commands:
+1. gets:
+	Enter the filename and subfolder when prompted [NOTE: For empty subfolder enter /]
+	1. Gets the file parts from distributed servers
+	Returns: ERROR message if files doesn't exist
+ - example: get/Get foo1 xyz/ ##gets the file foo1 from the subdirectory xyz/
+	
+
+2. puts:
+	Enter the filename and subfolder when prompted
+	1. puts files onto distributed servers with redundancy
+ - example: put/PUT foo1 xyz/  ##puts the file foo1 in the subdirectory xyz/
+
+3. ls:
+	This command lists all the available files on the server.
+ - example: list xyz/  ##lists the files in the subdirectory xyz/
+
+
+Supports timeout of 1 second
+Extra Credits:
+	Optimized get 
+	Encryption/Decryption done using XOR
+	Implemented subfolder on DFS
+
+
